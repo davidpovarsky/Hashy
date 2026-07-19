@@ -21,7 +21,7 @@ let package = Package(
         .package(url: "https://github.com/krzyzanowskim/STTextView.git", from: "2.3.5"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "6.2.1"),
         .package(
-            url: "https://github.com/christopherkarani/Conduit.git", from: "0.3.0",
+            url: "https://github.com/christopherkarani/Conduit.git", exact: "0.3.5",
             traits: ["Anthropic", "OpenAI", "OpenRouter"]),
         .package(url: "https://github.com/yaslab/ULID.swift.git", from: "1.3.1"),
     ],

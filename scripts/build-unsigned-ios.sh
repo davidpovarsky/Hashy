@@ -34,72 +34,6 @@ xcrun --sdk iphoneos --show-sdk-version || true
 xcrun --sdk iphoneos --show-sdk-path || true
 echo "::endgroup::"
 
-echo "::group::Apply CI compatibility patch"
-python3 <<'PY'
-from pathlib import Path
-
-path = Path("Core/Sources/MarkdownStorage/Sync/FileWatcher.swift")
-text = path.read_text()
-old = '''        ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                self.logger.info("Metadata query initial gather complete — items=\\(query.resultCount)")
-                self.logMetadataQueryItems(query)
-                self.handleMetadataQueryUpdate()
-            }
-        }
-
-        let updateObserver = NotificationCenter.default.addObserver(
-            forName: .NSMetadataQueryDidUpdate,
-            object: query,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                self.logger.debug("Metadata query update received — items=\\(query.resultCount)")
-                self.logMetadataQueryItems(query)
-                self.handleMetadataQueryUpdate()
-            }
-        }
-'''
-new = '''        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, let query = self.metadataQuery else { return }
-                self.logger.info("Metadata query initial gather complete — items=\\(query.resultCount)")
-                self.logMetadataQueryItems(query)
-                self.handleMetadataQueryUpdate()
-            }
-        }
-
-        let updateObserver = NotificationCenter.default.addObserver(
-            forName: .NSMetadataQueryDidUpdate,
-            object: query,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, let query = self.metadataQuery else { return }
-                self.logger.debug("Metadata query update received — items=\\(query.resultCount)")
-                self.logMetadataQueryItems(query)
-                self.handleMetadataQueryUpdate()
-            }
-        }
-'''
-if old in text:
-    path.write_text(text.replace(old, new))
-    print("Applied FileWatcher Swift concurrency patch")
-elif new in text:
-    print("FileWatcher Swift concurrency patch already applied")
-else:
-    raise SystemExit("Expected FileWatcher observer block was not found")
-PY
-PATCH_STATUS=$?
-if [[ $PATCH_STATUS -ne 0 ]]; then
-  echo "CI compatibility patch failed with status $PATCH_STATUS"
-  exit "$PATCH_STATUS"
-fi
-git diff -- Core/Sources/MarkdownStorage/Sync/FileWatcher.swift | tee "$LOG_DIR/ci-source-patch.diff"
-echo "::endgroup::"
-
 echo "::group::Project and schemes"
 set +e
 xcodebuild -list -project "$PROJECT_PATH" 2>&1 | tee "$LOG_DIR/xcodebuild-list.log"
@@ -124,6 +58,17 @@ RESOLVE_STATUS=${PIPESTATUS[0]}
 set -e
 if [[ $RESOLVE_STATUS -ne 0 ]]; then
   echo "Package resolution failed with status $RESOLVE_STATUS. Continuing to the build so the full failure is logged."
+fi
+echo "::endgroup::"
+
+echo "::group::Resolved package lock"
+PACKAGE_RESOLVED_PATH="$(find "$ROOT_DIR" -path "$OUTPUT_DIR" -prune -o -name Package.resolved -print -quit)"
+if [[ -n "$PACKAGE_RESOLVED_PATH" ]]; then
+  echo "Package.resolved: $PACKAGE_RESOLVED_PATH"
+  cp "$PACKAGE_RESOLVED_PATH" "$LOG_DIR/Package.resolved"
+  cat "$PACKAGE_RESOLVED_PATH"
+else
+  echo "No Package.resolved was generated under the repository root."
 fi
 echo "::endgroup::"
 

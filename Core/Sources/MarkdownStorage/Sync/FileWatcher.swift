@@ -232,8 +232,8 @@ public final class FileWatcher: ObservableObject {
             object: query,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
+            MainActor.assumeIsolated {
+                guard let self, let query = self.metadataQuery else { return }
                 self.logger.info("Metadata query initial gather complete — items=\(query.resultCount)")
                 self.logMetadataQueryItems(query)
                 self.handleMetadataQueryUpdate()
@@ -245,8 +245,8 @@ public final class FileWatcher: ObservableObject {
             object: query,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
+            MainActor.assumeIsolated {
+                guard let self, let query = self.metadataQuery else { return }
                 self.logger.debug("Metadata query update received — items=\(query.resultCount)")
                 self.logMetadataQueryItems(query)
                 self.handleMetadataQueryUpdate()
