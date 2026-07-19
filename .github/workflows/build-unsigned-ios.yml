@@ -1,0 +1,126 @@
+name: Build unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - "Hashy/**"
+      - "Core/**"
+      - "scripts/build-unsigned-ios.sh"
+      - ".github/workflows/build-unsigned-ios.yml"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "Hashy/**"
+      - "Core/**"
+      - "scripts/build-unsigned-ios.sh"
+      - ".github/workflows/build-unsigned-ios.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unsigned-ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    name: Build Hashy for iPhone and iPad
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    env:
+      OUTPUT_DIR: ${{ github.workspace }}/build/unsigned-ios
+      PROJECT_PATH: ${{ github.workspace }}/Hashy/Hashy.xcodeproj
+      SCHEME: Hashy
+      CONFIGURATION: Release
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Record runner and Xcode information
+        shell: bash
+        run: |
+          mkdir -p "$OUTPUT_DIR/logs"
+          {
+            echo "GitHub repository: $GITHUB_REPOSITORY"
+            echo "Git ref: $GITHUB_REF"
+            echo "Commit: $GITHUB_SHA"
+            echo "Runner: $RUNNER_NAME"
+            echo "Runner OS: $RUNNER_OS"
+            echo "Runner architecture: $RUNNER_ARCH"
+            echo
+            sw_vers
+            echo
+            xcode-select -p
+            xcodebuild -version
+            echo
+            xcrun --sdk iphoneos --show-sdk-version
+            xcrun --sdk iphoneos --show-sdk-path
+            echo
+            df -h
+          } 2>&1 | tee "$OUTPUT_DIR/logs/runner-environment.log"
+
+      - name: Build unsigned IPA
+        id: build
+        shell: bash
+        run: |
+          chmod +x scripts/build-unsigned-ios.sh
+          scripts/build-unsigned-ios.sh
+
+      - name: Write workflow summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "# Hashy unsigned iOS build"
+            echo
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Runner: \`$RUNNER_NAME\`"
+            echo "- Xcode: \`$(xcodebuild -version | tr '\n' ' ')\`"
+            echo "- Build result: **${{ steps.build.outcome }}**"
+            echo
+            if [[ -f "$OUTPUT_DIR/ipa/Hashy-unsigned.ipa" ]]; then
+              echo "The unsigned IPA was created successfully and is available in the **Hashy-unsigned-iOS** artifact."
+            else
+              echo "No IPA was produced. Download **Hashy-iOS-build-logs** and inspect \`xcodebuild.log\`, \`package-resolution.log\`, and \`script.log\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload unsigned IPA and app bundle
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hashy-unsigned-iOS-${{ github.run_number }}
+          path: |
+            build/unsigned-ios/ipa/Hashy-unsigned.ipa
+            build/unsigned-ios/ipa/Hashy-unsigned-app.zip
+            build/unsigned-ios/build-result.txt
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload build logs and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hashy-iOS-build-logs-${{ github.run_number }}
+          path: |
+            build/unsigned-ios/logs/**
+            build/unsigned-ios/DerivedData/Logs/**
+          if-no-files-found: warn
+          retention-days: 14
+          include-hidden-files: true
+
+      - name: Print failure pointers
+        if: failure()
+        shell: bash
+        run: |
+          echo "The build failed. Diagnostic artifacts were uploaded."
+          echo "Primary log: build/unsigned-ios/logs/xcodebuild.log"
+          echo "Package log: build/unsigned-ios/logs/package-resolution.log"
+          echo "Wrapper log: build/unsigned-ios/logs/script.log"
