@@ -51,6 +51,8 @@ xcodebuild \
   -project "$PROJECT_PATH" \
   -scheme "$SCHEME" \
   -clonedSourcePackagesDirPath "$OUTPUT_DIR/SourcePackages" \
+  -skipMacroValidation \
+  -skipPackagePluginValidation \
   2>&1 | tee "$LOG_DIR/package-resolution.log"
 RESOLVE_STATUS=${PIPESTATUS[0]}
 set -e
@@ -69,11 +71,13 @@ xcodebuild \
   -destination 'generic/platform=iOS' \
   -derivedDataPath "$DERIVED_DATA_DIR" \
   -clonedSourcePackagesDirPath "$OUTPUT_DIR/SourcePackages" \
+  -skipMacroValidation \
+  -skipPackagePluginValidation \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY='' \
   DEVELOPMENT_TEAM='' \
-  clean build \
+  build \
   2>&1 | tee "$LOG_DIR/xcodebuild.log"
 BUILD_STATUS=${PIPESTATUS[0]}
 set -e
@@ -88,6 +92,8 @@ xcodebuild \
   -configuration "$CONFIGURATION" \
   -sdk iphoneos \
   -destination 'generic/platform=iOS' \
+  -skipMacroValidation \
+  -skipPackagePluginValidation \
   -showBuildSettings \
   CODE_SIGNING_ALLOWED=NO \
   2>&1 | tee "$LOG_DIR/build-settings.log"
