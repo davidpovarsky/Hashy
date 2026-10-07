@@ -6,7 +6,6 @@ on:
       - "Build unsigned iOS IPA"
       - "Deploy Site"
     types:
-      - requested
       - in_progress
       - completed
 
